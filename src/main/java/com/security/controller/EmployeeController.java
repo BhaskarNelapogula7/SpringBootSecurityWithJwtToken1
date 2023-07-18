@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.security.dto.EmployeeDto;
 import com.security.exception.EmployeeNotFoundException;
@@ -37,74 +38,28 @@ public class EmployeeController {
 
 	@Autowired
 	private ModelMapper modelMapper;
-	
+
 	@Autowired
 	private JwtUtils jwtUtils;
-	
-//	@PostMapping("/addemployee")
-//	@PreAuthorize("hasRole('ROLE_HR')") // Restrict access to the "Hr" role
-//	public ResponseEntity<Employee> saveEmployee(@RequestBody EmployeeDto empDto) throws EmployeeNotFoundException {
-//		ResponseEntity<Employee> resp = null;
-//		try {
-//			// convert DTO to an entity
-//
-//			Employee emp = modelMapper.map(empDto, Employee.class);
-//			Employee saveEmployee = empService.saveEmployee(emp);
-//			resp = new ResponseEntity<Employee>(saveEmployee, HttpStatus.OK);
-//		} catch (Exception e) {
-//			throw new EmployeeNotFoundException("Failed to save employee please check once");
-//
-//		}
-//		return (ResponseEntity<Employee>) resp;
-//	}
 
 	@PostMapping("/addemployee")
 	@PreAuthorize("hasRole('ROLE_HR')") // Restrict access to the "HR" role
 	public ResponseEntity<Employee> saveEmployee(@RequestBody @Valid EmployeeDto empDto, HttpServletRequest request) {
-	    try {
-	        // Check if the authenticated role is HR
-	        if (!hasRole("ROLE_HR")) {
-	            throw new RoleMismatchException("Invalid role for accessing this endpoint");
-	        }
-
-	        // Validate the token
-	        String token = extractTokenFromHeaders(request);
-	        System.out.println("getting token from db :"+token);
-	        if (!isTokenValid(token)) {
-	            throw new InvalidTokenException("Invalid token, please check once");
-	        }
-	        // Process the request
-	        Employee emp = modelMapper.map(empDto, Employee.class);
-	        Employee savedEmployee = empService.saveEmployee(emp);
-	        return ResponseEntity.ok(savedEmployee);
-	    } catch (Exception e) {
-	        throw new EmployeeNotFoundException("Failed to save employee");
-	    }
+		try {	
+			// Process the request
+			Employee emp = modelMapper.map(empDto, Employee.class);
+			Employee savedEmployee = empService.saveEmployee(emp);
+			return ResponseEntity.ok(savedEmployee);
+		} catch (RoleMismatchException e) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, e.getMessage());
+		} catch (InvalidTokenException e) {
+			throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, e.getMessage());
+		} catch (EmployeeNotFoundException e) {
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+		} catch (Exception e) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save employee");
+		}
 	}
-
-	private boolean hasRole(String requiredRole) {
-	    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-	    String authenticatedRole = authentication.getAuthorities().iterator().next().getAuthority();
-
-	    System.out.println("the authenticatedrole from db" + authenticatedRole);
-	    return authentication.getAuthorities().stream()
-	            .anyMatch(auth -> auth.getAuthority().equals(requiredRole));
-	    
-	}
-
-	private String extractTokenFromHeaders(HttpServletRequest request) {
-	    String authorizationHeader = request.getHeader("Authorization");
-	    if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
-	        return authorizationHeader.substring(7); // Remove "Bearer " prefix
-	    }
-	    return null;
-	}
-
-	private boolean isTokenValid(String token) {
-	    return token != null && jwtUtils.validateToken(token);
-	}
-
-	
 	@GetMapping("/employee/{id}")
 	@PreAuthorize("hasRole('ROLE_HR')")
 	public ResponseEntity<EmployeeDto> getEmployeeById(@PathVariable Integer id) throws EmployeeNotFoundException {
